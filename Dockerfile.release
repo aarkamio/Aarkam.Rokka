@@ -1,30 +1,34 @@
 # =========================================================================
-# Aarkam Rokka Sovereign Storage Engine & Distributed Fabric (v1.0.2)
+# Aarkam Rokka Sovereign Storage Engine & Distributed Fabric (v1.0.3)
 # Production Container Image (Option A: Release Artifact Distribution)
+# Services: Aarkam.Rokka (Coordinator :57774/:7774) & Aarkam.Rokka.Gateway (:57772/:7772)
 # =========================================================================
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS runtime
 
 LABEL org.opencontainers.image.title="Aarkam Rokka Sovereign Storage Substrate" \
-      org.opencontainers.image.description="Stateless cluster control plane, Raft consensus quorum, and line-rate S3 streaming gateway" \
-      org.opencontainers.image.version="1.0.2" \
+      org.opencontainers.image.description="Stateless cluster control plane (Aarkam.Rokka), Raft consensus quorum, and line-rate storage gateway (Aarkam.Rokka.Gateway)" \
+      org.opencontainers.image.version="1.0.3" \
       org.opencontainers.image.vendor="Aarkam.IO" \
       org.opencontainers.image.licenses="Proprietary"
 
-# Install network utilities, certificates, and runtime prerequisites
+# Install network utilities, OpenSSL PKI tools, certificates, and runtime prerequisites
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    openssl \
     libsqlite3-0 \
     procps \
     net-tools \
     iproute2 \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/lib/rokka/metadata \
+                /var/lib/rokka/catalog \
+                /var/lib/rokka/security \
                 /var/lib/rokka/data \
                 /var/log/rokka \
                 /etc/rokka \
                 /app \
-    && chmod 0700 /var/lib/rokka/metadata
+    && chmod 0700 /var/lib/rokka/metadata /var/lib/rokka/security
 
 WORKDIR /app
 
@@ -35,14 +39,14 @@ COPY dist/linux/ /app/
 RUN chmod +x /app/rokka-coordinator /app/rokka-gateway /app/install-rokka.sh /app/entrypoint.sh 2>/dev/null || true
 
 # Expose standard Rokka ports:
-# 7774:  Coordinator HTTP (Cleartext gRPC & Health Probe)
-# 57774: Coordinator HTTPS (mTLS Control & Raft Quorum)
-# 7772:  Gateway HTTP (S3 REST & Ingestion Data Plane)
-# 57772: Gateway HTTPS (Secure S3 REST Gateway)
+# 7774:  Aarkam.Rokka Coordinator HTTP/2 (Internal gRPC & Health Probe)
+# 57774: Aarkam.Rokka Coordinator HTTPS (mTLS Control Plane & Raft Quorum)
+# 7772:  Aarkam.Rokka.Gateway HTTP (S3 REST & Ingestion Data Plane)
+# 57772: Aarkam.Rokka.Gateway HTTPS (Secure SigV4 S3 REST Gateway)
 EXPOSE 7774 57774 7772 57772
 
 # Persistent state volumes
-VOLUME ["/var/lib/rokka/metadata", "/var/lib/rokka/data", "/var/log/rokka", "/etc/rokka"]
+VOLUME ["/var/lib/rokka/metadata", "/var/lib/rokka/catalog", "/var/lib/rokka/security", "/var/lib/rokka/data", "/var/log/rokka", "/etc/rokka"]
 
 # Health check (validates Coordinator by default, or Gateway)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

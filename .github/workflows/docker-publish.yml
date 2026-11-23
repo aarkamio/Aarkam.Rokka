@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Image Version Tag (e.g. 1.0.2)'
+        description: 'Image Version Tag (e.g. 1.0.3)'
         required: true
-        default: '1.0.2'
+        default: '1.0.3'
       release_tag:
-        description: 'GitHub Release Tag to fetch binary from (e.g. rokka-v1.0.2)'
+        description: 'GitHub Release Tag to fetch binary from (e.g. rokka-v1.0.3)'
         required: false
-        default: 'rokka-v1.0.2'
+        default: 'rokka-v1.0.3'
 
 permissions:
   contents: read
@@ -49,7 +49,7 @@ jobs:
           CLEAN_VER="${CLEAN_VER#v}"
           CLEAN_VER="${CLEAN_VER#-}"
           if [ -z "${CLEAN_VER}" ]; then
-            CLEAN_VER="${{ github.event.inputs.version || '1.0.2' }}"
+            CLEAN_VER="${{ github.event.inputs.version || '1.0.3' }}"
           fi
           
           echo "version=${CLEAN_VER}" >> $GITHUB_OUTPUT
@@ -151,8 +151,8 @@ jobs:
             cp entrypoint.sh dist/linux/
           elif [ -f "V-${CLEAN_VER}/linux/entrypoint.sh" ] && [ ! -f "dist/linux/entrypoint.sh" ]; then
             cp "V-${CLEAN_VER}/linux/entrypoint.sh" dist/linux/
-          elif [ -f "V-1.0.2/linux/entrypoint.sh" ] && [ ! -f "dist/linux/entrypoint.sh" ]; then
-            cp "V-1.0.2/linux/entrypoint.sh" dist/linux/
+          elif [ -f "V-1.0.3/linux/entrypoint.sh" ] && [ ! -f "dist/linux/entrypoint.sh" ]; then
+            cp "V-1.0.3/linux/entrypoint.sh" dist/linux/
           fi
           
           # Verify staged binaries
@@ -194,4 +194,4 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: aarkam/aarkam.rokka
-          readme-filepath: V-1.0.2/DOCKER_README.md
+          readme-filepath: DOCKER_README.md

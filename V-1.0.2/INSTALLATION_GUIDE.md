@@ -1,60 +1,69 @@
-# Rokka Sovereign Storage Engine — Standalone Installation Guide
+# Rokka Sovereign Storage Engine — Standalone Installation & Activation Guide
 # Official Production Air-Gapped Deployment Guide (Version 1.0.2-GA)
 
 | Specification | Details |
 | :--- | :--- |
 | **Document Identifier** | `ARK-ROKKA-INSTALL-V1.0.2` |
-| **Product** | Rokka Sovereign Storage Engine (`rokka-coordinator` & `rokka-gateway`) |
-| **Release Version** | `V-1.0.2-GA (Production Stable)` |
-| **Architectural Scope** | Standalone Sovereign Storage Substrate (Control Plane & S3 REST Data Gateway) |
-| **Target Audience** | Datacenter Storage Engineers, Infrastructure Administrators, Defense Systems Engineers |
+| **Product** | Aarkam Rokka Sovereign Storage Engine (`rokka-coordinator` & `rokka-gateway`) |
+| **Standardized Service Names** | **`Aarkam.Rokka`** (Coordinator) & **`Aarkam.Rokka.Gateway`** (Gateway) |
+| **Release Version** | `v1.0.2-GA (V-1.0.2, Production Stable)` |
+| **Default Coordinator Endpoint** | **`https://rokka-coordinator.aarkam:57774`** (`:57774` HTTPS/mTLS, `:7774` gRPC) |
+| **Default Gateway Endpoint** | **`https://rokka-gateway.aarkam:57772`** (`:57772` HTTPS, `:7772` HTTP) |
+| **Customer Portal (AarkamCP)** | **[https://aarkam.io/Administration/Auth/Login](https://aarkam.io/Administration/Auth/Login)** |
 | **Compliance Level** | Saudi NCA ECC-2:2024, NCA CSCC-1:2023, FIPS 140-3 Zero-Trust Architecture |
-| **Target Distribution** | Zero-Egress Air-Gapped Datacenters (Linux x64, Windows Server x64, OCI Container) |
+| **Target Distribution** | Zero-Egress Air-Gapped Datacenters (Linux `x86_64`, Windows Server `x64`, OCI Container) |
 
 ---
 
-## 1. System Overview & Sovereign Ecosystem Architecture
+## 1. System Overview & Sovereign Ecosystem Service Structure
 
-The **Rokka Sovereign Storage Engine** provides an autonomous, enterprise-grade, high-performance object and key-value storage fabric designed specifically for air-gapped sovereign environments where external connectivity is strictly prohibited (zero telemetry, zero cloud callbacks).
+The **Aarkam Rokka Sovereign Storage Engine (`v1.0.2-GA`)** provides an autonomous, enterprise-grade, high-performance object and key-value storage fabric designed for air-gapped sovereign environments (zero telemetry, zero external cloud callbacks).
 
-Rokka forms the core substrate of the Aarkam ecosystem and operates in tight integration with **Abodi** and **AM CLI**:
+All services follow the standardized **Aarkam V2** service naming structure across Windows Server Services and Linux `systemd` units:
+
+| Service Name | Binary / Daemon | Default Ports | Role in Aarkam V2 Fabric |
+| :--- | :--- | :---: | :--- |
+| **`Aarkam.Rokka`** | `rokka-coordinator` | **`57774`** (HTTPS/mTLS)<br/>**`7774`** (gRPC HTTP/2) | Stateless Control Plane, Raft MON Quorum, HRW Placement, Node Enrollment CA & Genesis License Verifier |
+| **`Aarkam.Rokka.Gateway`** | `rokka-gateway` | **`57772`** (HTTPS S3)<br/>**`7772`** (HTTP S3) | Line-Rate AWS SigV4 S3 REST Gateway, AES-256-GCM Envelope Encryption & Ahmodi SIMD Cauchy Reed-Solomon (`4+2`, `8+3`, `8+4`, `16+4`) |
+| **`Aarkam.Abodi`** | `Abodi` (`v1.0.3+`) | **`57775`** (gRPC mTLS)<br/>**`57776`** (HTTPS REST) | Storage Node Gateway, Dual-Mode Kdouja SAT Substrate & Predictive SMART Hardware Telemetry Agent |
+| **`Aarkam.Kdouja`** | `kdoujad` (`v1.0.2`) | **`57771`** (gRPC) | LSM-Tree Metadata Engine & Unbuffered Direct I/O (`O_DIRECT`) Block PageStore (`Aarkam.Kdouja.SDK v1.0.1`) |
 
 ```mermaid
 flowchart TB
     subgraph ClientLayer["Management & Client Access Layer"]
-        CLI["AM CLI (am)<br/>[DPAPI / POSIX 0600 Secure Token Cache]"]
+        CLI["AM CLI (am v1.0.2+)<br/>[DPAPI / POSIX 0600 Secure Token Cache]"]
         S3Client["Standard S3 Clients / SDKs<br/>[AWS CLI, MinIO mc, Boto3, rclone]"]
     end
 
-    subgraph RokkaSubstrate["Rokka Sovereign Storage Substrate (V-1.0.2)"]
-        subgraph GatewayDaemon["Rokka Gateway (:7772 / :57772)"]
+    subgraph RokkaSubstrate["Aarkam Rokka Sovereign Storage Substrate (V-1.0.2)"]
+        subgraph GatewayDaemon["Service: Aarkam.Rokka.Gateway (:7772 / :57772)"]
             GW["rokka-gateway<br/>AWS SigV4 Authentication & Request Router"]
-            EC["Cauchy Reed-Solomon SIMD Engine (4+2 / 8+4)"]
+            EC["Ahmodi Cauchy Reed-Solomon SIMD Engine (4+2 / 8+3 / 8+4 / 16+4)"]
             AES["AES-256-GCM Inline Object Encryption"]
             GW --- EC
             GW --- AES
         end
 
-        subgraph CoordinatorDaemon["Rokka Coordinator (:7774 / :57774)"]
-            COORD["rokka-coordinator<br/>Raft MON Quorum & Placement Engine"]
-            CA["Node Enrollment Certificate Authority"]
-            RBAC["Zero-Trust Interceptor & Operator Identity"]
+        subgraph CoordinatorDaemon["Service: Aarkam.Rokka (:7774 / :57774)"]
+            COORD["rokka-coordinator<br/>https://rokka-coordinator.aarkam:57774"]
+            CA["ECDSA P-256 Node Enrollment CA"]
+            RBAC["Zero-Trust Operator Auth & Footprint Verifier (ARK-FP-*)"]
             COORD --- CA
             COORD --- RBAC
         end
     end
 
-    subgraph StorageNodes["Physical Storage Fleet (Abodi Node Agents)"]
-        NODE1["Storage Node 1 (Abodi :57775)<br/>Kdouja PageStore (Direct I/O NVMe)"]
-        NODE2["Storage Node 2 (Abodi :57775)<br/>Kdouja PageStore (Direct I/O NVMe)"]
-        NODEN["Storage Node N (Abodi :57775)<br/>Kdouja PageStore (Direct I/O NVMe)"]
+    subgraph StorageNodes["Physical Storage Fleet (Service: Aarkam.Abodi)"]
+        NODE1["Storage Node 1 (Aarkam.Abodi :57775)<br/>Kdouja PageStore (Direct I/O NVMe)"]
+        NODE2["Storage Node 2 (Aarkam.Abodi :57775)<br/>Kdouja PageStore (Direct I/O NVMe)"]
+        NODEN["Storage Node N (Aarkam.Abodi :57775)<br/>Kdouja PageStore (Direct I/O NVMe)"]
     end
 
-    ClientLayer ==>|"AM Management gRPC"| CoordinatorDaemon
-    ClientLayer ==>|"AWS SigV4 S3 REST"| GatewayDaemon
+    ClientLayer ==>|"AM Management gRPC (:57774)"| CoordinatorDaemon
+    ClientLayer ==>|"AWS SigV4 S3 REST (:57772)"| GatewayDaemon
     GatewayDaemon ==>|"gRPC Placement & HRW Hash"| CoordinatorDaemon
-    GatewayDaemon ==>|"Replicated / Coded Chunks"| StorageNodes
-    StorageNodes <==>|"mTLS Heartbeats & Telemetry"| CoordinatorDaemon
+    GatewayDaemon ==>|"Cauchy Erasure Shards (:57775)"| StorageNodes
+    StorageNodes <==>|"mTLS Enrollment & Telemetry (:57774)"| CoordinatorDaemon
 
     style ClientLayer fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#fff
     style RokkaSubstrate fill:#022c22,stroke:#10b981,stroke-width:2px,color:#fff
@@ -63,147 +72,204 @@ flowchart TB
     style StorageNodes fill:#1c1917,stroke:#f59e0b,stroke-width:2px,color:#fff
 ```
 
-### Ecosystem Roles & Interconnections:
-1. **`rokka-coordinator`**: Stateless control plane, Raft MON consensus quorum, dynamic Highest Random Weight (HRW) placement, and internal mTLS Node Enrollment Certificate Authority.
-2. **`rokka-gateway`**: Line-rate AWS SigV4 compatible S3 REST gateway with SIMD-accelerated Cauchy Reed-Solomon erasure coding and inline AES-256-GCM envelope encryption.
-3. **`abodi`**: Physical storage node daemon installed on each storage server. Enrolls with Coordinator via `https://rokka-coordinator.aarkam:57774` and serves Cauchy chunks directly to/from physical NVMe/SSD media.
-4. **`am` (AM CLI)**: Unified fabric management CLI used to configure Rokka, generate Abodi node enrollment tokens, inspect health, and manage S3 buckets.
+---
+
+## 2. Default Installation Ports & Custom Endpoint Resolution
+
+By default, if the operator does not specify a custom port or URL during installation:
+- **Rokka Coordinator (`Aarkam.Rokka`)** defaults to:
+  ```text
+  https://rokka-coordinator.aarkam:57774
+  ```
+  *(with internal HTTP/2 gRPC and `/health` probe on port `7774`)*.
+- **Rokka Gateway (`Aarkam.Rokka.Gateway`)** defaults to:
+  ```text
+  https://rokka-gateway.aarkam:57772
+  ```
+  *(with HTTP S3 and `/health` probe on port `7772`)*.
+
+### Customizing Ports or URLs (Optional)
+- **Default Installation (Recommended Sovereign Standard):**
+  - Windows: `.\install-rokka.ps1` -> Binds Coordinator HTTPS to `57774` (`https://rokka-coordinator.aarkam:57774`).
+  - Linux: `sudo ./install-rokka.sh` -> Binds Coordinator HTTPS to `57774` (`https://rokka-coordinator.aarkam:57774`).
+- **Custom Port or On-Premises IP / FQDN:**
+  - Pass `-RokkaUrl "https://10.20.0.10:57774"` (or `-CoordinatorHttpsPort 58443`) on Windows, or `--rokka-url "https://10.20.0.10:57774"` (or `--coordinator-https-port 58443`) on Linux.
+  - If port `443` is specified (`-CoordinatorHttpsPort 443` / `--coordinator-https-port 443`), the endpoint automatically omits the port suffix (`https://rokka-coordinator.aarkam`).
 
 ---
 
-## 2. Standardized Sovereign Endpoint Matrix
+## 3. Zero-Trust Security, PKI & Cryptographic Keys (CWE-312)
 
-| Daemon | Port | Protocol | Sovereign DNS URL | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| **`rokka-coordinator`** | `7774` | HTTP/2 Cleartext | `http://rokka-coordinator.aarkam:7774` | Internal gRPC & Health Probe (`/health`) |
-| **`rokka-coordinator`** | `57774` (or `443`) | HTTPS / mTLS | `https://rokka-coordinator.aarkam:57774`<br/>`https://rokka-coordinator.aarkam` | Sovereign Control Plane, Raft Quorum, & Node Enrollment |
-| **`rokka-gateway`** | `7772` | HTTP REST | `http://rokka-gateway.aarkam:7772` | High-Throughput S3 REST API (Local/VPC Ingestion) |
-| **`rokka-gateway`** | `57772` (or `443`) | HTTPS REST | `https://rokka-gateway.aarkam:57772`<br/>`https://rokka-gateway.aarkam` | Secure S3 REST API (SigV4 TLS Ingestion) |
+Under Saudi NCA ECC-2:2024 (§2-1-3) and FIPS 140-3 Zero-Trust compliance, **cryptographic keys are never stored in plaintext JSON configuration files**. The installer automatically provisions and injects 256-bit keys into the OS environment (Windows Machine Environment Variables or `/etc/rokka/rokka.env` with `0600` permissions on Linux) and bootstraps the ECDSA P-256 Cluster Root CA (`ca.pfx` / `ca.crt`):
 
----
-
-## 3. Zero-Trust Security & Key Architecture (CWE-312)
-
-Under sovereign zero-trust compliance (NCA ECC-2:2024 / FIPS 140-3), **cryptographic keys are never stored in plaintext configuration files**. All secrets are injected exclusively through system environment variables:
-
-| Secret Name | Environment Variable | Purpose |
+| Secret / Artifact | Environment Variable / Path | Purpose |
 | :--- | :--- | :--- |
-| **Master Key** | `ROKKA_MASTER_KEY` | 64-character hex (256-bit AES) cluster encryption key. |
+| **Master Key** | `ROKKA_MASTER_KEY` | 64-character hex (256-bit AES) cluster master encryption key for per-chunk AES-256-GCM envelope keys. |
 | **WAL Encryption Key** | `ROKKA_WAL_ENCRYPTION_KEY` | 64-character hex key encrypting Kdouja LSM write-ahead logs on disk. |
-| **S3 Admin Access Key** | `ROKKA_ACCESS_KEY_ID` | Default: `rokka_admin`. Admin account identity for S3 REST operations. |
-| **S3 Admin Secret Key** | `ROKKA_SECRET_ACCESS_KEY` | Resolved automatically from `ROKKA_MASTER_KEY` if not explicitly customized. |
-| **Cluster CA Passphrase**| `ROKKA_CLUSTER_CA_PASSWORD` | Cryptographic passphrase protecting internal mTLS root CA private key. |
+| **Cluster CA Passphrase** | `ROKKA_CLUSTER_CA_PASSWORD` | Cryptographic passphrase protecting the internal ECDSA P-256 Cluster Root CA (`ca.pfx`). |
+| **Raft & JWT Secret** | `ROKKA_CLUSTER_SECRET` | 64-character hex secret authenticating Raft quorum messages and local operator JWT tokens. |
+| **S3 Admin Access Key** | `ROKKA_ACCESS_KEY_ID` | Default: `rokka_admin`. Root S3 account identity for `Aarkam.Rokka.Gateway`. |
+| **S3 Admin Secret Key** | `ROKKA_SECRET_ACCESS_KEY` | Defaults to `ROKKA_MASTER_KEY` unless customized. |
 
 > [!IMPORTANT]
-> **Disaster Recovery Requirement**: The installer automatically generates cryptographically random 256-bit keys and sets them in the server's environment. You **must immediately backup `ROKKA_MASTER_KEY`** in your enterprise vault. If the machine is re-imaged or migrated, this key is required to decrypt cluster storage and metadata.
+> **Disaster Recovery Requirement:** Immediately back up `ROKKA_MASTER_KEY`, `ROKKA_WAL_ENCRYPTION_KEY`, and `ROKKA_CLUSTER_CA_PASSWORD` printed at the end of installation into your enterprise secret vault.
 
 ---
 
-## 4. Binary Package Download (GitHub Releases)
+## 4. Windows Server Deployment (`install-rokka.ps1`)
 
-Official standalone binaries and air-gapped installation bundles are distributed via [GitHub Releases (v1.0.2)](https://github.com/aarkamio/Aarkam/releases/tag/v1.0.2).
+### Step 1: Unpack Release Package
+```powershell
+Expand-Archive -Path "rokka-v1.0.2-win-x64.zip" -DestinationPath "C:\Setup\Rokka" -Force
+Set-Location "C:\Setup\Rokka"
+```
 
-| Platform | Package Asset | Download Link |
-| :--- | :--- | :--- |
-| **Linux (x64)** | `rokka-v1.0.2-linux-x64.zip` | [Download from GitHub](https://github.com/aarkamio/Aarkam/releases/download/v1.0.2/rokka-v1.0.2-linux-x64.zip) |
-| **Windows (x64)** | `rokka-v1.0.2-win-x64.zip` | [Download from GitHub](https://github.com/aarkamio/Aarkam/releases/download/v1.0.2/rokka-v1.0.2-win-x64.zip) |
-| **Linux Coordinator (Standalone)** | `rokka-coordinator-v1.0.2-linux-x64.zip` | [Download from GitHub](https://github.com/aarkamio/Aarkam/releases/download/v1.0.2/rokka-coordinator-v1.0.2-linux-x64.zip) |
-| **Linux Gateway (Standalone)** | `rokka-gateway-v1.0.2-linux-x64.zip` | [Download from GitHub](https://github.com/aarkamio/Aarkam/releases/download/v1.0.2/rokka-gateway-v1.0.2-linux-x64.zip) |
+### Step 2: Run Pre-Flight Check (Optional)
+```powershell
+.\install-rokka.ps1 -CheckOnly
+```
 
----
+### Step 3: Execute Automated Production Installer
+Open PowerShell as **Administrator** and run:
+```powershell
+# Default installation (Rokka Coordinator: https://rokka-coordinator.aarkam:57774)
+.\install-rokka.ps1
 
-## 5. Windows Server Deployment (Automated PowerShell)
+# Or with an explicit ClusterCode and custom Coordinator URL:
+.\install-rokka.ps1 -ClusterCode "ARK-PROD-RYD-01" -RokkaUrl "https://rokka-coordinator.aarkam:57774"
+```
 
-1. Download and unpack `rokka-v1.0.2-win-x64.zip`:
-   ```powershell
-   Invoke-WebRequest -Uri "https://github.com/aarkamio/Aarkam/releases/download/v1.0.2/rokka-v1.0.2-win-x64.zip" -OutFile "rokka-v1.0.2-win-x64.zip"
-   Expand-Archive -Path "rokka-v1.0.2-win-x64.zip" -DestinationPath "."
-   cd rokka-v1.0.2-win-x64
-   ```
-2. Open PowerShell as **Administrator** and run:
-   ```powershell
-   .\install-rokka.ps1 -StartServices
-   ```
-3. Verify daemons:
-   ```powershell
-   Get-Service -Name "Rokka.Coordinator", "Rokka.Gateway"
-   rokka-coordinator --version
-   rokka-gateway --version
-   curl.exe -k http://localhost:7774/health
-   curl.exe -k http://localhost:7772/health
-   ```
+### Step 4: Verify Windows Services (`Aarkam.Rokka` & `Aarkam.Rokka.Gateway`)
+```powershell
+Get-Service -Name "Aarkam.Rokka", "Aarkam.Rokka.Gateway"
+rokka-coordinator --version
+rokka-gateway --version
+curl.exe -s http://127.0.0.1:7774/health
+curl.exe -s http://127.0.0.1:7772/health
+```
 
 ---
 
-## 6. Linux Deployment (Automated systemd)
+## 5. Linux Deployment (`install-rokka.sh`)
 
-1. Download and unpack `rokka-v1.0.2-linux-x64.zip`:
-   ```bash
-   curl -fSL -o rokka-v1.0.2-linux-x64.zip "https://github.com/aarkamio/Aarkam/releases/download/v1.0.2/rokka-v1.0.2-linux-x64.zip"
-   unzip rokka-v1.0.2-linux-x64.zip
-   cd rokka-v1.0.2-linux-x64
-   ```
-2. Run installer as root:
-   ```bash
-   sudo ./install-rokka.sh --start-services
-   ```
-3. Verify systemd services:
-   ```bash
-   sudo systemctl status rokka-coordinator rokka-gateway
-   curl -s http://localhost:7774/health
-   curl -s http://localhost:7772/health
-   ```
+### Step 1: Unpack Release Package
+```bash
+sudo mkdir -p /tmp/rokka-setup
+sudo unzip rokka-v1.0.2-linux-x64.zip -d /tmp/rokka-setup
+cd /tmp/rokka-setup
+sudo chmod +x install-rokka.sh rokka-coordinator rokka-gateway
+```
+
+### Step 2: Run Pre-Flight Check (Optional)
+```bash
+sudo ./install-rokka.sh --check-only
+```
+
+### Step 3: Execute Automated Production Installer
+```bash
+# Default installation (Rokka Coordinator: https://rokka-coordinator.aarkam:57774)
+sudo ./install-rokka.sh
+
+# Or with an explicit ClusterCode and custom Coordinator URL:
+sudo ./install-rokka.sh --cluster-code "ARK-PROD-RYD-01" --rokka-url "https://rokka-coordinator.aarkam:57774"
+```
+
+### Step 4: Verify `systemd` Services (`Aarkam.Rokka` & `Aarkam.Rokka.Gateway`)
+```bash
+sudo systemctl status Aarkam.Rokka Aarkam.Rokka.Gateway
+curl -s http://127.0.0.1:7774/health
+curl -s http://127.0.0.1:7772/health
+```
 
 ---
 
-## 7. Connecting Abodi Storage Nodes to Rokka
+## 6. Rokka Cluster Activation & Sovereign Genesis Ceremony
 
-After installing Rokka, deploy **Abodi** on each physical storage host:
+Because Rokka ships with **zero default operator passwords and zero cloud callbacks**, activating a newly installed Rokka cluster requires binding its deterministic **Rokka Coordinator Footprint (`ARK-FP-...`)** on the **Aarkam Customer Portal (AarkamCP)** and applying the signed **Sovereign Genesis Bundle (`.arkbundle`)**.
 
-1. **Obtain Node Enrollment Token** (using AM CLI):
+### 6.1 Required Activation Information (Printed Automatically by Installer)
+At the end of `install-rokka.ps1` and `install-rokka.sh`, the installer outputs a dedicated **ROKKA CLUSTER ACTIVATION & SOVEREIGN GENESIS CEREMONY INFORMATION** block containing:
+
+1. **AarkamCP (Customer Portal) Url:** `https://aarkam.io/Administration/Auth/Login`
+2. **AarkamCP Subscription Portal:** `https://aarkam.io/Administration/CurrentSubscription`
+3. **Rokka Coordinator Footprint:** `ARK-FP-XXXXXXXX-XXXXXXXX-XXXXXXXX` *(Deterministic HMAC-SHA256 hardware signature across Hostname, CPU Count, Architecture, System Machine ID, and Primary Physical MAC)*
+4. **Cluster Code:** `XXXX-XXXX-XXXXX` *(e.g. `ARK-PROD-RYD-01` or auto-generated 15-character code)*
+5. **Rokka Coordinator Endpoint:** `https://rokka-coordinator.aarkam:57774`
+6. **Rokka Gateway Endpoint:** `https://rokka-gateway.aarkam:57772`
+7. **Cryptographic Recovery Keys:** `ROKKA_MASTER_KEY`, `ROKKA_WAL_ENCRYPTION_KEY`, `ROKKA_CLUSTER_CA_PASSWORD`, `ROKKA_CLUSTER_SECRET`
+
+### 6.2 Step-by-Step Activation Workflow
+
+#### Step 1: Bind Rokka Coordinator Footprint on AarkamCP
+1. Open your browser and sign in to **AarkamCP**:
+   ```text
+   https://aarkam.io/Administration/Auth/Login
+   ```
+2. Navigate to **Administration -> Current Subscription**:
+   ```text
+   https://aarkam.io/Administration/CurrentSubscription
+   ```
+3. On your active subscription card, click **"Bind Cluster Fingerprint"**:
+   - **Cluster Fingerprint:** Paste the `Rokka Coordinator Footprint` (`ARK-FP-...`) printed by the installer (or retrieved via `am cluster fingerprint`).
+   - **Cluster Code:** Enter the `Cluster Code` printed by the installer.
+   - Click **Save Binding** *(Note: Hardware fingerprint binding is immutable once locked)*.
+4. Click **"Manage Operators"** and add your authorized enterprise operators:
+   - Assign RBAC roles (`ClusterAdmin`, `StorageOperator`, `SecurityOfficer`, `Auditor`) and initial passwords (hashed in-memory via PBKDF2-HMAC-SHA512, 600,000 iterations).
+5. Click **"Download Sovereign Genesis Bundle (.arkbundle)"** and transfer the `.arkbundle` file across your air-gap boundary to the Rokka Coordinator host.
+
+#### Step 2: Inspect & Apply Genesis Bundle Offline via AM CLI
+```bash
+# 1. Point AM CLI to Rokka Coordinator
+am config set --endpoint "https://rokka-coordinator.aarkam:57774"
+
+# 2. Verify local Rokka Coordinator Footprint
+am cluster fingerprint
+
+# 3. Pre-flight offline inspection of RSA-4096-PSS signature & Hardware Lock (must show MATCH)
+am license inspect --bundle ./<your-license-key>.arkbundle
+
+# 4. Ingest Genesis Bundle into Aarkam.Rokka Coordinator (provisions operators & seals quotas)
+am license apply --bundle ./<your-license-key>.arkbundle
+
+# 5. Authenticate operator session offline
+am auth login -u <operator-username> -p "<operator-password>"
+am auth whoami
+```
+
+---
+
+## 7. Connecting `Aarkam.Abodi` Storage Nodes to Rokka
+
+Once `Aarkam.Rokka` is activated, enroll your physical storage nodes running **`Aarkam.Abodi` (`v1.0.3+`)**:
+
+1. **Generate Single-Use Node Enrollment Token (`ET1.<hex>`) via AM CLI:**
    ```bash
    am node token create --node-code "NODE-01" --tier "SAT"
    ```
 
-2. **Install Abodi on the Physical Storage Host**:
-   - **Linux**:
+2. **Install `Aarkam.Abodi` on Each Physical Storage Host:**
+   - **Linux (`Aarkam.Abodi.service`):**
      ```bash
-     sudo /opt/rokka/abodi/install-abodi.sh \
+     sudo ./install-abodi.sh \
        --node-code "NODE-01" \
        --rokka-url "https://rokka-coordinator.aarkam:57774" \
-       --enrollment-token "<TOKEN_FROM_AM>" \
+       --enrollment-token "<ET1.TOKEN_FROM_AM>" \
        --storage-dir "/var/lib/rokka/storage"
      ```
-   - **Windows**:
+   - **Windows (`Aarkam.Abodi`):**
      ```powershell
      .\install-abodi.ps1 `
        -NodeCode "NODE-01" `
        -RokkaUrl "https://rokka-coordinator.aarkam:57774" `
-       -EnrollmentToken "<TOKEN_FROM_AM>" `
-       -StorageDir "D:\Rokka\Storage" `
-       -StartService
+       -EnrollmentToken "<ET1.TOKEN_FROM_AM>" `
+       -StorageDir "D:\rokka_storage"
      ```
 
-> [!TIP]
-> If using standard port 443 with an internal load balancer or DNS reverse proxy, pass `--rokka-url "https://rokka-coordinator.aarkam"`. On-premises IP addresses are also fully supported (e.g. `--rokka-url "https://10.20.0.10:57774"`).
-
----
-
-## 7. Managing Rokka with AM CLI
-
-```bash
-# 1. Point AM to Rokka Coordinator
-am config set --endpoint "https://rokka-coordinator.aarkam:57774"
-
-# 2. Login as Administrator
-am auth login --username admin --password <PASSWORD>
-
-# 3. Verify Cluster Health & Storage Fleet
-am cluster status
-am node list
-
-# 4. Configure S3 & Create Bucket
-am s3 config set --endpoint "https://rokka-gateway.aarkam:57772" --access-key "rokka_admin" --secret-key "<ROKKA_MASTER_KEY>"
-am s3 mb s3://sovereign-vault --policy 4+2
-am s3 ls
-```
+3. **Verify Storage Fleet & S3 Bucket Operations:**
+   ```bash
+   am cluster status
+   am node list
+   am s3 config set --endpoint "https://rokka-gateway.aarkam:57772" --access-key "rokka_admin" --secret-key "<ROKKA_MASTER_KEY>"
+   am s3 mb s3://sovereign-vault --policy 4+2
+   am s3 ls
+   ```

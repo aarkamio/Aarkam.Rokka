@@ -1,0 +1,48 @@
+services:
+  rokka:
+    image: ${DOCKER_REGISTRY-}aarkam/aarkam.rokka:v1.0.2
+    build:
+      context: .
+      dockerfile: Dockerfile.release
+    container_name: aarkam-rokka
+    hostname: rokka-coordinator.aarkam
+    restart: unless-stopped
+    ports:
+      - "${COORDINATOR_PORT:-7774}:7774"          # Aarkam.Rokka Coordinator HTTP/2 (Internal gRPC & Health Probe)
+      - "${COORDINATOR_HTTPS_PORT:-57774}:57774"  # Aarkam.Rokka Coordinator HTTPS (mTLS Control Plane & Raft Quorum)
+      - "${GATEWAY_PORT:-7772}:7772"              # Aarkam.Rokka.Gateway HTTP (S3 REST & Streaming Ingestion)
+      - "${GATEWAY_HTTPS_PORT:-57772}:57772"      # Aarkam.Rokka.Gateway HTTPS (Secure SigV4 S3 REST Gateway)
+    volumes:
+      - rokka_metadata:/var/lib/rokka/metadata
+      - rokka_catalog:/var/lib/rokka/catalog
+      - rokka_security:/var/lib/rokka/security
+      - rokka_data:/var/lib/rokka/data
+      - rokka_logs:/var/log/rokka
+      - rokka_config:/etc/rokka
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DOTNET_CLI_TELEMETRY_OPTOUT=1
+      - ROKKA_ROLE=${ROKKA_ROLE:-all}
+      - ROKKA_COORDINATOR_URL=${ROKKA_COORDINATOR_URL:-https://rokka-coordinator.aarkam:57774}
+      - ROKKA_GATEWAY_URL=${ROKKA_GATEWAY_URL:-https://rokka-gateway.aarkam:57772}
+      - ROKKA_ACCESS_KEY_ID=${ROKKA_ACCESS_KEY_ID:-rokka_admin}
+      - ROKKA_MASTER_KEY=${ROKKA_MASTER_KEY:-0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF}
+      - ROKKA_SECRET_ACCESS_KEY=${ROKKA_SECRET_ACCESS_KEY:-0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF}
+      - ROKKA_WAL_ENCRYPTION_KEY=${ROKKA_WAL_ENCRYPTION_KEY:-FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210}
+      - ROKKA_CLUSTER_CA_PASSWORD=${ROKKA_CLUSTER_CA_PASSWORD:-AARKAM_SOVEREIGN_CA_SECRET_PASSPHRASE}
+      - ROKKA_CLUSTER_SECRET=${ROKKA_CLUSTER_SECRET:-AARKAM_SOVEREIGN_RAFT_QUORUM_CLUSTER_SECRET_2026}
+      - Jwt__Key=${ROKKA_CLUSTER_SECRET:-AARKAM_SOVEREIGN_RAFT_QUORUM_CLUSTER_SECRET_2026}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:7774/health && curl -f http://127.0.0.1:7772/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  rokka_metadata:
+  rokka_catalog:
+  rokka_security:
+  rokka_data:
+  rokka_logs:
+  rokka_config:
